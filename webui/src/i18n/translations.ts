@@ -618,6 +618,8 @@ const EXACT_ZH_TO_EN: Record<string, string> = {
   "导入节点": "Import Nodes",
   "导入中...": "Importing...",
   "确认导入": "Confirm Import",
+  "目标分组": "Target Group",
+  "新建分组": "New Group",
   "分组名称": "Group Name",
   "节点内容": "Node Content",
   "成功导入 {{count}} 个节点到分组 {{name}}": "Successfully imported {{count}} nodes to group {{name}}",

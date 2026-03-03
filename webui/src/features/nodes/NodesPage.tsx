@@ -255,7 +255,8 @@ export function NodesPage() {
   const [selectedNodeHash, setSelectedNodeHash] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [importName, setImportName] = useState("manual-import");
+  const [importTarget, setImportTarget] = useState("__new__");
+  const [importNewName, setImportNewName] = useState("");
   const [importContent, setImportContent] = useState("");
   const { toasts, showToast, dismissToast } = useToast();
 
@@ -393,6 +394,14 @@ export function NodesPage() {
     },
   });
 
+  const resolveImportName = () => {
+    if (importTarget === "__new__") {
+      return importNewName.trim() || "manual-import";
+    }
+    const match = subscriptions.find((s) => s.id === importTarget);
+    return match?.name ?? "manual-import";
+  };
+
   const importMutation = useMutation({
     mutationFn: importNodes,
     onSuccess: async (result, variables) => {
@@ -406,7 +415,8 @@ export function NodesPage() {
       );
       setImportModalOpen(false);
       setImportContent("");
-      setImportName("manual-import");
+      setImportTarget("__new__");
+      setImportNewName("");
     },
     onError: (error) => {
       showToast("error", formatApiErrorMessage(error, t));
@@ -962,18 +972,36 @@ export function NodesPage() {
               </Button>
             </div>
 
-            <form className="form-grid" onSubmit={(event) => { event.preventDefault(); if (importMutation.isPending || !importContent.trim()) return; importMutation.mutate({ content: importContent, name: importName }); }}>
+            <form className="form-grid" onSubmit={(event) => { event.preventDefault(); if (importMutation.isPending || !importContent.trim()) return; importMutation.mutate({ content: importContent, name: resolveImportName() }); }}>
               <div className="field-group field-span-2">
-                <label className="field-label" htmlFor="import-name">
-                  {t("分组名称")}
+                <label className="field-label" htmlFor="import-target">
+                  {t("目标分组")}
                 </label>
-                <Input
-                  id="import-name"
-                  value={importName}
-                  onChange={(event) => setImportName(event.target.value)}
-                  placeholder="manual-import"
-                />
+                <Select
+                  id="import-target"
+                  value={importTarget}
+                  onChange={(event) => setImportTarget(event.target.value)}
+                >
+                  {subscriptions.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                  <option value="__new__">{t("新建分组")}</option>
+                </Select>
               </div>
+
+              {importTarget === "__new__" ? (
+                <div className="field-group field-span-2">
+                  <label className="field-label" htmlFor="import-new-name">
+                    {t("分组名称")}
+                  </label>
+                  <Input
+                    id="import-new-name"
+                    value={importNewName}
+                    onChange={(event) => setImportNewName(event.target.value)}
+                    placeholder="manual-import"
+                  />
+                </div>
+              ) : null}
 
               <div className="field-group field-span-2">
                 <label className="field-label" htmlFor="import-content">
