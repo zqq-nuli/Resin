@@ -43,6 +43,8 @@ type resinApp struct {
 	inboundSrv     *http.Server
 	inboundLn      net.Listener
 	transportPool  *proxy.OutboundTransportPool
+	socks5Ln       net.Listener
+	socks5Handler  *proxy.SOCKS5Proxy
 }
 
 func run() error {
@@ -431,6 +433,23 @@ func (a *resinApp) buildNetworkServers(engine *state.StateEngine) error {
 	a.inboundLn = proxy.NewCountingListener(inboundLn, a.metricsManager)
 	a.inboundSrv = &http.Server{Handler: inboundHandler}
 
+	// SOCKS5 inbound proxy (optional, enabled when RESIN_SOCKS5_PORT > 0).
+	if a.envCfg.SOCKS5Port > 0 {
+		a.socks5Handler = proxy.NewSOCKS5Proxy(proxy.SOCKS5ProxyConfig{
+			ProxyToken:  a.envCfg.ProxyToken,
+			Router:      a.topoRuntime.router,
+			Pool:        a.topoRuntime.pool,
+			Health:      a.topoRuntime.pool,
+			Events:      proxyEvents,
+			MetricsSink: a.metricsManager,
+		})
+		socks5Ln, err := net.Listen("tcp", formatListenAddress(a.envCfg.ListenAddress, a.envCfg.SOCKS5Port))
+		if err != nil {
+			return fmt.Errorf("socks5 server listen: %w", err)
+		}
+		a.socks5Ln = proxy.NewCountingListener(socks5Ln, a.metricsManager)
+	}
+
 	return nil
 }
 
@@ -478,6 +497,24 @@ func (a *resinApp) startServers() <-chan error {
 		reportServerErr("resin server", a.inboundSrv.Serve(a.inboundLn))
 	}()
 
+	if a.socks5Ln != nil && a.socks5Handler != nil {
+		go func() {
+			log.Printf("SOCKS5 server starting on %s", formatListenAddress(a.envCfg.ListenAddress, a.envCfg.SOCKS5Port))
+			for {
+				conn, err := a.socks5Ln.Accept()
+				if err != nil {
+					// Listener closed during shutdown — not a runtime error.
+					if opErr, ok := err.(*net.OpError); ok && !opErr.Temporary() {
+						return
+					}
+					reportServerErr("socks5 server", err)
+					return
+				}
+				go a.socks5Handler.HandleConn(conn)
+			}
+		}()
+	}
+
 	return serverErrCh
 }
 
@@ -505,6 +542,12 @@ func formatListenURL(listenAddress string, port int) string {
 }
 
 func (a *resinApp) shutdown(ctx context.Context) {
+	if a.socks5Ln != nil {
+		if err := a.socks5Ln.Close(); err != nil {
+			log.Printf("SOCKS5 listener close error: %v", err)
+		}
+		log.Println("SOCKS5 server stopped")
+	}
 	if err := a.inboundSrv.Shutdown(ctx); err != nil {
 		log.Printf("Server shutdown error: %v", err)
 	}

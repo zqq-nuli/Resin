@@ -24,6 +24,7 @@ export type EnvConfig = {
   log_dir: string;
   listen_address: string;
   resin_port: number;
+  socks5_port: number;
   api_max_body_bytes: number;
   max_latency_table_entries: number;
   probe_concurrency: number;

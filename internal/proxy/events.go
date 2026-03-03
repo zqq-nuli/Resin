@@ -5,6 +5,7 @@ type ProxyType int
 const (
 	ProxyTypeForward ProxyType = 1
 	ProxyTypeReverse ProxyType = 2
+	ProxyTypeSOCKS5  ProxyType = 3
 )
 
 // ConnectionDirection indicates inbound vs outbound connection flow.

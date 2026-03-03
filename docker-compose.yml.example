@@ -11,9 +11,11 @@ services:
       RESIN_PROXY_TOKEN: ${RESIN_PROXY_TOKEN}
       RESIN_LISTEN_ADDRESS: 0.0.0.0
       RESIN_PORT: 2260
+      # RESIN_SOCKS5_PORT: 1080
       # TZ: <Your Time Zone>
     ports:
       - "2260:2260"
+      # - "1080:1080"
     volumes:
       - resin_cache:/var/cache/resin
       - resin_state:/var/lib/resin

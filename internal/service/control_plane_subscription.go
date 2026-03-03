@@ -500,3 +500,59 @@ func shouldCleanupSubscriptionNode(entry *node.NodeEntry) bool {
 	}
 	return entry.IsCircuitOpen() || (!entry.HasOutbound() && entry.GetLastError() != "")
 }
+
+// ImportNodesRequest holds parameters for the node import action.
+type ImportNodesRequest struct {
+	Content string `json:"content"`
+	Name    string `json:"name"`
+}
+
+// ImportNodesResponse is the API response for a successful node import.
+type ImportNodesResponse struct {
+	SubscriptionID string `json:"subscription_id"`
+	NodeCount      int    `json:"node_count"`
+}
+
+// ImportNodes creates a local subscription from raw node URIs and immediately
+// refreshes it so that the nodes are parsed into the pool synchronously.
+func (s *ControlPlaneService) ImportNodes(req ImportNodesRequest) (*ImportNodesResponse, error) {
+	content := strings.TrimSpace(req.Content)
+	if content == "" {
+		return nil, invalidArg("content is required")
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = "manual-import"
+	}
+
+	sourceType := subscription.SourceTypeLocal
+	enabled := true
+	createReq := CreateSubscriptionRequest{
+		Name:       &name,
+		SourceType: &sourceType,
+		Content:    &content,
+		Enabled:    &enabled,
+	}
+
+	sub, err := s.CreateSubscription(createReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// Synchronously refresh to parse nodes into the pool.
+	if err := s.RefreshSubscription(sub.ID); err != nil {
+		return nil, err
+	}
+
+	// Re-fetch the subscription to get the updated node count.
+	refreshed, err := s.GetSubscription(sub.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ImportNodesResponse{
+		SubscriptionID: refreshed.ID,
+		NodeCount:      refreshed.NodeCount,
+	}, nil
+}

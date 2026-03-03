@@ -26,6 +26,7 @@ type EnvConfig struct {
 
 	// Ports
 	ResinPort       int
+	SOCKS5Port      int
 	APIMaxBodyBytes int
 
 	// Core
@@ -82,6 +83,7 @@ func LoadEnvConfig() (*EnvConfig, error) {
 
 	// --- Ports ---
 	cfg.ResinPort = envInt("RESIN_PORT", 2260, &errs)
+	cfg.SOCKS5Port = envInt("RESIN_SOCKS5_PORT", 0, &errs)
 	cfg.APIMaxBodyBytes = envInt("RESIN_API_MAX_BODY_BYTES", 1<<20, &errs)
 
 	// --- Core ---
@@ -156,6 +158,12 @@ func LoadEnvConfig() (*EnvConfig, error) {
 	}
 
 	validatePort("RESIN_PORT", cfg.ResinPort, &errs)
+	if cfg.SOCKS5Port != 0 {
+		validatePort("RESIN_SOCKS5_PORT", cfg.SOCKS5Port, &errs)
+		if cfg.SOCKS5Port == cfg.ResinPort {
+			errs = append(errs, "RESIN_SOCKS5_PORT must differ from RESIN_PORT")
+		}
+	}
 	validatePositive("RESIN_API_MAX_BODY_BYTES", cfg.APIMaxBodyBytes, &errs)
 
 	validatePositive("RESIN_MAX_LATENCY_TABLE_ENTRIES", cfg.MaxLatencyTableEntries, &errs)

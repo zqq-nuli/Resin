@@ -780,6 +780,10 @@ export function SystemConfigPage() {
                       <label className="field-label" style={{ margin: 0 }}>{t("统一服务端口")}</label>
                       <Input readOnly disabled value={String(envBaseline.resin_port)} />
                     </div>
+                    <div className="field-group">
+                      <label className="field-label" style={{ margin: 0 }}>{t("SOCKS5 代理端口")}</label>
+                      <Input readOnly disabled value={envBaseline.socks5_port ? String(envBaseline.socks5_port) : t("未启用")} />
+                    </div>
                   </div>
                 </section>
 

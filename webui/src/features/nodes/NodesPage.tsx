@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { AlertTriangle, Eraser, Globe, RefreshCw, Sparkles, X, Zap } from "lucide-react";
+import { AlertTriangle, Eraser, Globe, Plus, RefreshCw, Sparkles, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useLocation } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
@@ -10,6 +10,7 @@ import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { OffsetPagination } from "../../components/ui/OffsetPagination";
 import { Select } from "../../components/ui/Select";
+import { Textarea } from "../../components/ui/Textarea";
 import { ToastContainer } from "../../components/ui/Toast";
 import { useToast } from "../../hooks/useToast";
 import { useI18n } from "../../i18n";
@@ -18,7 +19,7 @@ import { formatDateTime, formatRelativeTime } from "../../lib/time";
 import { listPlatforms } from "../platforms/api";
 import type { Platform } from "../platforms/types";
 import { listSubscriptions } from "../subscriptions/api";
-import { getNode, listNodes, probeEgress, probeLatency } from "./api";
+import { getNode, importNodes, listNodes, probeEgress, probeLatency } from "./api";
 import type { NodeSummary } from "./types";
 import { getAllRegions, getRegionName } from "./regions";
 import type { NodeListFilters, NodeSortBy, SortOrder } from "./types";
@@ -253,6 +254,9 @@ export function NodesPage() {
   const [pageSize, setPageSize] = useState<number>(200);
   const [selectedNodeHash, setSelectedNodeHash] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importName, setImportName] = useState("manual-import");
+  const [importContent, setImportContent] = useState("");
   const { toasts, showToast, dismissToast } = useToast();
 
   const queryClient = useQueryClient();
@@ -388,6 +392,42 @@ export function NodesPage() {
       showToast("error", formatApiErrorMessage(error, t));
     },
   });
+
+  const importMutation = useMutation({
+    mutationFn: importNodes,
+    onSuccess: async (result, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["nodes"] }),
+        queryClient.invalidateQueries({ queryKey: ["subscriptions"] }),
+      ]);
+      showToast(
+        "success",
+        t("成功导入 {{count}} 个节点到分组 {{name}}", { count: result.node_count, name: variables.name?.trim() || "manual-import" })
+      );
+      setImportModalOpen(false);
+      setImportContent("");
+      setImportName("manual-import");
+    },
+    onError: (error) => {
+      showToast("error", formatApiErrorMessage(error, t));
+    },
+  });
+
+  useEffect(() => {
+    if (!importModalOpen || importMutation.isPending) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      setImportModalOpen(false);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [importModalOpen, importMutation.isPending]);
 
   const runProbeEgress = async (hash: string) => {
     await probeEgressMutation.mutateAsync(hash);
@@ -700,6 +740,10 @@ export function NodesPage() {
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.125rem", marginLeft: "auto" }}>
+              <Button size="sm" variant="secondary" onClick={() => setImportModalOpen(true)} style={{ minHeight: "32px", height: "32px", padding: "0 0.75rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                <Plus size={16} />
+                {t("导入节点")}
+              </Button>
               <Button size="sm" variant="secondary" onClick={refreshNodes} disabled={nodesQuery.isFetching} style={{ minHeight: "32px", height: "32px", padding: "0 0.75rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
                 <RefreshCw size={16} className={nodesQuery.isFetching ? "spin" : undefined} />
                 {t("刷新")}
@@ -904,6 +948,58 @@ export function NodesPage() {
                 </div>
               </section>
             </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {importModalOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label={t("导入节点")}>
+          <Card className="modal-card">
+            <div className="modal-header">
+              <h3>{t("导入节点")}</h3>
+              <Button variant="ghost" size="sm" aria-label={t("关闭")} onClick={() => setImportModalOpen(false)} disabled={importMutation.isPending}>
+                <X size={16} />
+              </Button>
+            </div>
+
+            <form className="form-grid" onSubmit={(event) => { event.preventDefault(); if (importMutation.isPending || !importContent.trim()) return; importMutation.mutate({ content: importContent, name: importName }); }}>
+              <div className="field-group field-span-2">
+                <label className="field-label" htmlFor="import-name">
+                  {t("分组名称")}
+                </label>
+                <Input
+                  id="import-name"
+                  value={importName}
+                  onChange={(event) => setImportName(event.target.value)}
+                  placeholder="manual-import"
+                />
+              </div>
+
+              <div className="field-group field-span-2">
+                <label className="field-label" htmlFor="import-content">
+                  {t("节点内容")}
+                </label>
+                <Textarea
+                  id="import-content"
+                  rows={10}
+                  value={importContent}
+                  onChange={(event) => setImportContent(event.target.value)}
+                  placeholder={t("支持格式（简版）：") + "\n" + t("sing-box JSON / Clash YAML|JSON / URI（vmess:// vless:// trojan:// ss:// ...）") + "\n" + t("Base64（以上文本整体编码）也支持")}
+                />
+              </div>
+
+              <div className="field-group field-span-2" style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                <Button type="button" variant="secondary" onClick={() => setImportModalOpen(false)} disabled={importMutation.isPending}>
+                  {t("取消")}
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={importMutation.isPending || !importContent.trim()}
+                >
+                  {importMutation.isPending ? t("导入中...") : t("确认导入")}
+                </Button>
+              </div>
+            </form>
           </Card>
         </div>
       ) : null}

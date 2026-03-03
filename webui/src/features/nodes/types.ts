@@ -60,3 +60,6 @@ export type EgressProbeResult = {
 export type LatencyProbeResult = {
   latency_ewma_ms: number;
 };
+
+export type ImportNodesInput = { content: string; name?: string };
+export type ImportNodesResult = { subscription_id: string; node_count: number };

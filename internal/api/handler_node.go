@@ -202,3 +202,20 @@ func HandleProbeLatency(cp *service.ControlPlaneService) http.HandlerFunc {
 		WriteJSON(w, http.StatusOK, result)
 	}
 }
+
+// HandleImportNodes returns a handler for POST /api/v1/nodes/actions/import.
+func HandleImportNodes(cp *service.ControlPlaneService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req service.ImportNodesRequest
+		if err := DecodeBody(r, &req); err != nil {
+			writeDecodeBodyError(w, err)
+			return
+		}
+		result, err := cp.ImportNodes(req)
+		if err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusCreated, result)
+	}
+}

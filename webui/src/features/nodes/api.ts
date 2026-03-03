@@ -1,6 +1,8 @@
 import { apiRequest } from "../../lib/api-client";
 import type {
   EgressProbeResult,
+  ImportNodesInput,
+  ImportNodesResult,
   LatencyProbeResult,
   NodeListQuery,
   NodeSummary,
@@ -99,5 +101,12 @@ export async function probeEgress(hash: string): Promise<EgressProbeResult> {
 export async function probeLatency(hash: string): Promise<LatencyProbeResult> {
   return apiRequest<LatencyProbeResult>(`${basePath}/${hash}/actions/probe-latency`, {
     method: "POST",
+  });
+}
+
+export async function importNodes(input: ImportNodesInput): Promise<ImportNodesResult> {
+  return apiRequest<ImportNodesResult>(`${basePath}/actions/import`, {
+    method: "POST",
+    body: input,
   });
 }
