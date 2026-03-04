@@ -95,8 +95,15 @@ func TestEndToEnd_NodeEnterRoutableView(t *testing.T) {
 	obMgr.RemoveNodeOutbound(entry)
 	pool.NotifyNodeDirty(hash)
 
-	// After removing outbound, platform should exclude the node.
+	// Lazy-init mode: removing outbound alone should not remove routability.
+	if !plat.View().Contains(hash) {
+		t.Fatal("node should remain in routable view after outbound removed")
+	}
+
+	// A known outbound build error should exclude the node.
+	entry.SetLastError("outbound build: invalid config")
+	pool.NotifyNodeDirty(hash)
 	if plat.View().Contains(hash) {
-		t.Fatal("node should NOT be in routable view after outbound removed")
+		t.Fatal("node with build error should NOT be in routable view")
 	}
 }

@@ -12,10 +12,8 @@ import (
 	"github.com/Resinat/Resin/internal/config"
 	"github.com/Resinat/Resin/internal/model"
 	"github.com/Resinat/Resin/internal/node"
-	"github.com/Resinat/Resin/internal/outbound"
 	"github.com/Resinat/Resin/internal/platform"
 	"github.com/Resinat/Resin/internal/state"
-	"github.com/Resinat/Resin/internal/testutil"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -342,8 +340,7 @@ func TestBootstrapNodes_MissingDynamicDefaultsCircuitOpen(t *testing.T) {
 		t.Fatalf("bootstrapTopology: %v", err)
 	}
 
-	outboundMgr := outbound.NewOutboundManager(pool, &testutil.StubOutboundBuilder{})
-	if err := bootstrapNodes(engine, pool, subManager, outboundMgr, envCfg); err != nil {
+	if err := bootstrapNodes(engine, pool, subManager, envCfg); err != nil {
 		t.Fatalf("bootstrapNodes: %v", err)
 	}
 
@@ -414,8 +411,7 @@ func TestBootstrapNodes_DynamicRecordOverridesDefaultCircuitOpen(t *testing.T) {
 		t.Fatalf("bootstrapTopology: %v", err)
 	}
 
-	outboundMgr := outbound.NewOutboundManager(pool, &testutil.StubOutboundBuilder{})
-	if err := bootstrapNodes(engine, pool, subManager, outboundMgr, envCfg); err != nil {
+	if err := bootstrapNodes(engine, pool, subManager, envCfg); err != nil {
 		t.Fatalf("bootstrapNodes: %v", err)
 	}
 
@@ -470,8 +466,7 @@ func TestBootstrapNodes_RestoreEvictedSubscriptionNodeWithoutPoolRef(t *testing.
 		t.Fatalf("bootstrapTopology: %v", err)
 	}
 
-	outboundMgr := outbound.NewOutboundManager(pool, &testutil.StubOutboundBuilder{})
-	if err := bootstrapNodes(engine, pool, subManager, outboundMgr, envCfg); err != nil {
+	if err := bootstrapNodes(engine, pool, subManager, envCfg); err != nil {
 		t.Fatalf("bootstrapNodes: %v", err)
 	}
 

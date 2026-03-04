@@ -275,7 +275,7 @@ func TestRouteRequest_SameIPRotationMissRecreatesLease(t *testing.T) {
 		return NewPlatformRoutingState(), false
 	})
 
-	oldExpiry := time.Now().Add(time.Hour).UnixNano()
+	oldExpiry := time.Now().Add(2 * time.Hour).UnixNano()
 	oldLease := Lease{
 		NodeHash:       currentHash,
 		EgressIP:       currentEntry.GetEgressIP(),

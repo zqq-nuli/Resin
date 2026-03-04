@@ -114,8 +114,11 @@ func (p *Platform) evaluateNode(
 	subLookup node.SubLookupFunc,
 	geoLookup GeoLookupFunc,
 ) bool {
-	// 1. Healthy for routing (outbound ready + circuit not open).
-	if !entry.IsHealthy() {
+	// 1. Circuit must be closed. Outbound is allowed to be lazily initialized.
+	if entry.IsCircuitOpen() {
+		return false
+	}
+	if !entry.HasOutbound() && entry.GetLastError() != "" {
 		return false
 	}
 

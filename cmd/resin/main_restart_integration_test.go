@@ -174,8 +174,7 @@ func TestBootstrapRestart_RecoversTopologyAndStickyLease(t *testing.T) {
 		t.Fatalf("second bootstrapTopology: %v", err)
 	}
 
-	outboundMgr2 := outbound.NewOutboundManager(pool2, &testutil.StubOutboundBuilder{})
-	if err := bootstrapNodes(engine2, pool2, subManager2, outboundMgr2, envCfg); err != nil {
+	if err := bootstrapNodes(engine2, pool2, subManager2, envCfg); err != nil {
 		t.Fatalf("bootstrapNodes: %v", err)
 	}
 	pool2.RebuildAllPlatforms()

@@ -91,8 +91,24 @@ func TestPlatform_EvaluateNode_NoOutbound(t *testing.T) {
 		fn(h, entry)
 	}, alwaysLookup, usGeoLookup)
 
+	if p.View().Size() != 1 {
+		t.Fatal("node without outbound should still be routable for lazy init")
+	}
+}
+
+func TestPlatform_EvaluateNode_NoOutboundWithError(t *testing.T) {
+	p := NewPlatform("p1", "Test", nil, nil)
+	h := makeHash(`{"type":"ss"}`)
+	entry := makeFullyRoutableEntry(h, "sub1")
+	entry.Outbound.Store(nil)
+	entry.SetLastError("outbound build: invalid config")
+
+	p.FullRebuild(func(fn func(node.Hash, *node.NodeEntry) bool) {
+		fn(h, entry)
+	}, alwaysLookup, usGeoLookup)
+
 	if p.View().Size() != 0 {
-		t.Fatal("node without outbound should not be routable")
+		t.Fatal("node without outbound and with build error should not be routable")
 	}
 }
 

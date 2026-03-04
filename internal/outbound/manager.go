@@ -32,6 +32,10 @@ type OutboundManager struct {
 	builder OutboundBuilder
 }
 
+type nodeDirtyNotifier interface {
+	NotifyNodeDirty(hash node.Hash)
+}
+
 func NewOutboundManager(pool PoolAccessor, builder OutboundBuilder) *OutboundManager {
 	return &OutboundManager{pool: pool, builder: builder}
 }
@@ -79,6 +83,11 @@ func (m *OutboundManager) EnsureNodeOutbound(hash node.Hash) {
 		if old != nil {
 			closeOutbound(*old)
 		}
+		return
+	}
+
+	if notifier, ok := m.pool.(nodeDirtyNotifier); ok {
+		notifier.NotifyNodeDirty(hash)
 	}
 }
 

@@ -232,7 +232,7 @@ func (a *resinApp) bootstrapFromPersistence(engine *state.StateEngine) error {
 	}
 
 	// Phase 6.1: Bootstrap nodes (steps 3-6: static, subscription_nodes, dynamic, latency).
-	if err := bootstrapNodes(engine, a.topoRuntime.pool, a.topoRuntime.subManager, a.topoRuntime.outboundMgr, a.envCfg); err != nil {
+	if err := bootstrapNodes(engine, a.topoRuntime.pool, a.topoRuntime.subManager, a.envCfg); err != nil {
 		return err
 	}
 
@@ -399,6 +399,7 @@ func (a *resinApp) buildNetworkServers(engine *state.StateEngine) error {
 		ProxyToken:        a.envCfg.ProxyToken,
 		Router:            a.topoRuntime.router,
 		Pool:              a.topoRuntime.pool,
+		EnsureOutbound:    a.topoRuntime.outboundMgr.EnsureNodeOutbound,
 		Health:            a.topoRuntime.pool,
 		Events:            proxyEvents,
 		MetricsSink:       a.metricsManager,
@@ -410,6 +411,7 @@ func (a *resinApp) buildNetworkServers(engine *state.StateEngine) error {
 		ProxyToken:        a.envCfg.ProxyToken,
 		Router:            a.topoRuntime.router,
 		Pool:              a.topoRuntime.pool,
+		EnsureOutbound:    a.topoRuntime.outboundMgr.EnsureNodeOutbound,
 		PlatformLookup:    a.topoRuntime.pool,
 		Health:            a.topoRuntime.pool,
 		Matcher:           a.accountMatcher,
@@ -436,12 +438,13 @@ func (a *resinApp) buildNetworkServers(engine *state.StateEngine) error {
 	// SOCKS5 inbound proxy (optional, enabled when RESIN_SOCKS5_PORT > 0).
 	if a.envCfg.SOCKS5Port > 0 {
 		a.socks5Handler = proxy.NewSOCKS5Proxy(proxy.SOCKS5ProxyConfig{
-			ProxyToken:  a.envCfg.ProxyToken,
-			Router:      a.topoRuntime.router,
-			Pool:        a.topoRuntime.pool,
-			Health:      a.topoRuntime.pool,
-			Events:      proxyEvents,
-			MetricsSink: a.metricsManager,
+			ProxyToken:     a.envCfg.ProxyToken,
+			Router:         a.topoRuntime.router,
+			Pool:           a.topoRuntime.pool,
+			EnsureOutbound: a.topoRuntime.outboundMgr.EnsureNodeOutbound,
+			Health:         a.topoRuntime.pool,
+			Events:         proxyEvents,
+			MetricsSink:    a.metricsManager,
 		})
 		socks5Ln, err := net.Listen("tcp", formatListenAddress(a.envCfg.ListenAddress, a.envCfg.SOCKS5Port))
 		if err != nil {

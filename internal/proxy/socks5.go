@@ -47,22 +47,24 @@ const (
 
 // SOCKS5ProxyConfig holds dependencies for the SOCKS5 proxy.
 type SOCKS5ProxyConfig struct {
-	ProxyToken  string
-	Router      *routing.Router
-	Pool        outbound.PoolAccessor
-	Health      HealthRecorder
-	Events      EventEmitter
-	MetricsSink MetricsEventSink
+	ProxyToken     string
+	Router         *routing.Router
+	Pool           outbound.PoolAccessor
+	EnsureOutbound EnsureOutboundFunc
+	Health         HealthRecorder
+	Events         EventEmitter
+	MetricsSink    MetricsEventSink
 }
 
 // SOCKS5Proxy handles SOCKS5 protocol connections.
 type SOCKS5Proxy struct {
-	token       string
-	router      *routing.Router
-	pool        outbound.PoolAccessor
-	health      HealthRecorder
-	events      EventEmitter
-	metricsSink MetricsEventSink
+	token          string
+	router         *routing.Router
+	pool           outbound.PoolAccessor
+	ensureOutbound EnsureOutboundFunc
+	health         HealthRecorder
+	events         EventEmitter
+	metricsSink    MetricsEventSink
 }
 
 // NewSOCKS5Proxy creates a new SOCKS5 proxy handler.
@@ -72,12 +74,13 @@ func NewSOCKS5Proxy(cfg SOCKS5ProxyConfig) *SOCKS5Proxy {
 		ev = NoOpEventEmitter{}
 	}
 	return &SOCKS5Proxy{
-		token:       cfg.ProxyToken,
-		router:      cfg.Router,
-		pool:        cfg.Pool,
-		health:      cfg.Health,
-		events:      ev,
-		metricsSink: cfg.MetricsSink,
+		token:          cfg.ProxyToken,
+		router:         cfg.Router,
+		pool:           cfg.Pool,
+		ensureOutbound: cfg.EnsureOutbound,
+		health:         cfg.Health,
+		events:         ev,
+		metricsSink:    cfg.MetricsSink,
 	}
 }
 
@@ -292,7 +295,7 @@ func (s *SOCKS5Proxy) handleConnect(conn net.Conn, platName, account, target str
 		lifecycle.log.ClientIP = addr.IP.String()
 	}
 
-	routed, routeErr := resolveRoutedOutbound(s.router, s.pool, platName, account, target)
+	routed, routeErr := resolveRoutedOutbound(s.router, s.pool, s.ensureOutbound, platName, account, target)
 	if routeErr != nil {
 		lifecycle.setProxyError(routeErr)
 		rep := socks5RepGeneralFailure

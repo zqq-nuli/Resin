@@ -1,10 +1,13 @@
 package proxy
 
 import (
+	"github.com/Resinat/Resin/internal/node"
 	"github.com/Resinat/Resin/internal/outbound"
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/sagernet/sing-box/adapter"
 )
+
+type EnsureOutboundFunc func(hash node.Hash)
 
 type routedOutbound struct {
 	Route    routing.RouteResult
@@ -14,6 +17,7 @@ type routedOutbound struct {
 func resolveRoutedOutbound(
 	router *routing.Router,
 	pool outbound.PoolAccessor,
+	ensureOutbound EnsureOutboundFunc,
 	platformName string,
 	account string,
 	target string,
@@ -28,6 +32,14 @@ func resolveRoutedOutbound(
 		return routedOutbound{}, ErrNoAvailableNodes
 	}
 	obPtr := entry.Outbound.Load()
+	if obPtr == nil && ensureOutbound != nil {
+		ensureOutbound(result.NodeHash)
+		entry, ok = pool.GetEntry(result.NodeHash)
+		if !ok {
+			return routedOutbound{}, ErrNoAvailableNodes
+		}
+		obPtr = entry.Outbound.Load()
+	}
 	if obPtr == nil {
 		return routedOutbound{}, ErrNoAvailableNodes
 	}

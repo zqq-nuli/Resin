@@ -7,8 +7,6 @@ import (
 	"log"
 	"net/netip"
 	"os"
-	"runtime"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -228,8 +226,9 @@ func newTopologyRuntime(
 	outboundMgr := outbound.NewOutboundManager(pool, singboxBuilder)
 
 	probeMgr := probe.NewProbeManager(probe.ProbeConfig{
-		Pool:        pool,
-		Concurrency: envCfg.ProbeConcurrency,
+		Pool:           pool,
+		Concurrency:    envCfg.ProbeConcurrency,
+		EnsureOutbound: outboundMgr.EnsureNodeOutbound,
 		Fetcher: func(hash node.Hash, url string) ([]byte, time.Duration, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), envCfg.ProbeTimeout)
 			defer cancel()
@@ -269,9 +268,7 @@ func newTopologyRuntime(
 
 	pool.SetOnNodeAdded(func(hash node.Hash) {
 		engine.MarkNodeStatic(hash.Hex())
-		outboundMgr.EnsureNodeOutbound(hash)
-		// No NotifyNodeDirty here — AddNodeFromSub already notifies all platforms.
-		probeMgr.TriggerImmediateEgressProbe(hash)
+		// Outbound and probes are lazily initialized by runtime paths.
 	})
 	pool.SetOnNodeRemoved(func(hash node.Hash, entry *node.NodeEntry) {
 		markNodeRemovedDirty(engine, hash, entry)
@@ -689,38 +686,6 @@ func loadBootstrapNodeStatics(
 	return hashes, nil
 }
 
-func warmupBootstrapOutbounds(
-	hashes []node.Hash,
-	outboundMgr *outbound.OutboundManager,
-) {
-	if len(hashes) == 0 {
-		return
-	}
-
-	workers := runtime.GOMAXPROCS(0)
-	if workers < 1 {
-		workers = 1
-	}
-	hashCh := make(chan node.Hash, len(hashes))
-	for _, h := range hashes {
-		hashCh <- h
-	}
-	close(hashCh)
-
-	var wg sync.WaitGroup
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for h := range hashCh {
-				outboundMgr.EnsureNodeOutbound(h)
-			}
-		}()
-	}
-	wg.Wait()
-	log.Printf("Parallel outbound init complete (%d workers)", workers)
-}
-
 func restoreBootstrapSubscriptionBindings(
 	engine *state.StateEngine,
 	pool *topology.GlobalNodePool,
@@ -833,15 +798,12 @@ func bootstrapNodes(
 	engine *state.StateEngine,
 	pool *topology.GlobalNodePool,
 	subManager *topology.SubscriptionManager,
-	outboundMgr *outbound.OutboundManager,
 	envCfg *config.EnvConfig,
 ) error {
-	hashes, err := loadBootstrapNodeStatics(engine, pool, envCfg)
+	_, err := loadBootstrapNodeStatics(engine, pool, envCfg)
 	if err != nil {
 		return err
 	}
-
-	warmupBootstrapOutbounds(hashes, outboundMgr)
 
 	if err := restoreBootstrapSubscriptionBindings(engine, pool, subManager); err != nil {
 		return err

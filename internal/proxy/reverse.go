@@ -26,6 +26,7 @@ type ReverseProxyConfig struct {
 	ProxyToken        string
 	Router            *routing.Router
 	Pool              outbound.PoolAccessor
+	EnsureOutbound    EnsureOutboundFunc
 	PlatformLookup    PlatformLookup
 	Health            HealthRecorder
 	Matcher           AccountRuleMatcher
@@ -41,6 +42,7 @@ type ReverseProxy struct {
 	token             string
 	router            *routing.Router
 	pool              outbound.PoolAccessor
+	ensureOutbound    EnsureOutboundFunc
 	platLook          PlatformLookup
 	health            HealthRecorder
 	matcher           AccountRuleMatcher
@@ -66,6 +68,7 @@ func NewReverseProxy(cfg ReverseProxyConfig) *ReverseProxy {
 		token:           cfg.ProxyToken,
 		router:          cfg.Router,
 		pool:            cfg.Pool,
+		ensureOutbound:  cfg.EnsureOutbound,
 		platLook:        cfg.PlatformLookup,
 		health:          cfg.Health,
 		matcher:         cfg.Matcher,
@@ -280,7 +283,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	routed, routeErr := resolveRoutedOutbound(p.router, p.pool, parsed.PlatformName, account, parsed.Host)
+	routed, routeErr := resolveRoutedOutbound(p.router, p.pool, p.ensureOutbound, parsed.PlatformName, account, parsed.Host)
 	if routeErr != nil {
 		lifecycle.setProxyError(routeErr)
 		lifecycle.setHTTPStatus(routeErr.HTTPCode)

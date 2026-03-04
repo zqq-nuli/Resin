@@ -23,6 +23,10 @@ type ProbeConfig struct {
 	Pool        *topology.GlobalNodePool
 	Concurrency int // max concurrent probes
 
+	// EnsureOutbound lazily initializes outbound for a node.
+	// It is optional and must be nil-safe.
+	EnsureOutbound func(hash node.Hash)
+
 	// Fetcher executes HTTP via node hash. Injectable for testing.
 	Fetcher Fetcher
 
@@ -42,11 +46,12 @@ type ProbeConfig struct {
 // ProbeManager schedules and executes active probes against nodes in the pool.
 // It holds a direct reference to *topology.GlobalNodePool (no interface).
 type ProbeManager struct {
-	pool    *topology.GlobalNodePool
-	sem     chan struct{}
-	stopCh  chan struct{}
-	wg      sync.WaitGroup
-	fetcher Fetcher
+	pool           *topology.GlobalNodePool
+	sem            chan struct{}
+	stopCh         chan struct{}
+	wg             sync.WaitGroup
+	ensureOutbound func(hash node.Hash)
+	fetcher        Fetcher
 
 	maxEgressTestInterval           func() time.Duration
 	maxLatencyTestInterval          func() time.Duration
@@ -80,6 +85,7 @@ func NewProbeManager(cfg ProbeConfig) *ProbeManager {
 		pool:                            cfg.Pool,
 		sem:                             make(chan struct{}, conc),
 		stopCh:                          make(chan struct{}),
+		ensureOutbound:                  cfg.EnsureOutbound,
 		fetcher:                         cfg.Fetcher,
 		maxEgressTestInterval:           cfg.MaxEgressTestInterval,
 		maxLatencyTestInterval:          cfg.MaxLatencyTestInterval,
@@ -123,6 +129,32 @@ func (m *ProbeManager) Stop() {
 	m.wg.Wait()
 }
 
+func (m *ProbeManager) ensureOutboundReady(hash node.Hash, entry *node.NodeEntry) (*node.NodeEntry, bool) {
+	if entry == nil {
+		var ok bool
+		entry, ok = m.pool.GetEntry(hash)
+		if !ok {
+			return nil, false
+		}
+	}
+	if entry.Outbound.Load() != nil {
+		return entry, true
+	}
+
+	if m.ensureOutbound != nil {
+		m.ensureOutbound(hash)
+	}
+
+	current, ok := m.pool.GetEntry(hash)
+	if !ok {
+		return nil, false
+	}
+	if current.Outbound.Load() == nil {
+		return current, false
+	}
+	return current, true
+}
+
 // TriggerImmediateEgressProbe fires an async egress probe for a node.
 // The goroutine waits for a semaphore slot (or stop signal), never drops.
 // Caller returns immediately.
@@ -148,12 +180,9 @@ func (m *ProbeManager) TriggerImmediateEgressProbe(hash node.Hash) {
 			return // shutting down
 		}
 
-		entry, ok := m.pool.GetEntry(hash)
-		if !ok {
+		entry, ready := m.ensureOutboundReady(hash, nil)
+		if !ready {
 			return
-		}
-		if entry.Outbound.Load() == nil {
-			return // nil outbound → skip
 		}
 
 		m.probeEgress(hash, entry)
@@ -178,7 +207,8 @@ func (m *ProbeManager) ProbeEgressSync(hash node.Hash) (*EgressProbeResult, erro
 	if !ok {
 		return nil, fmt.Errorf("node not found")
 	}
-	if entry.Outbound.Load() == nil {
+	entry, ready := m.ensureOutboundReady(hash, entry)
+	if !ready {
 		return nil, fmt.Errorf("node outbound not ready")
 	}
 
@@ -232,7 +262,8 @@ func (m *ProbeManager) ProbeLatencySync(hash node.Hash) (*LatencyProbeResult, er
 	if !ok {
 		return nil, fmt.Errorf("node not found")
 	}
-	if entry.Outbound.Load() == nil {
+	entry, ready := m.ensureOutboundReady(hash, entry)
+	if !ready {
 		return nil, fmt.Errorf("node outbound not ready")
 	}
 
@@ -276,6 +307,10 @@ func (m *ProbeManager) scanEgress() {
 		interval = m.maxEgressTestInterval()
 	}
 	lookahead := 15 * time.Second
+	remainingEnsures := cap(m.sem)
+	if remainingEnsures < 1 {
+		remainingEnsures = 1
+	}
 
 	m.pool.Range(func(h node.Hash, entry *node.NodeEntry) bool {
 		// Check stop signal.
@@ -285,16 +320,24 @@ func (m *ProbeManager) scanEgress() {
 		default:
 		}
 
-		if entry.Outbound.Load() == nil {
-			return true // skip nil outbound
-		}
-
 		// Check if due: lastAttempt + interval - lookahead <= now.
 		lastCheck := entry.LastEgressUpdateAttempt.Load()
 		if lastCheck > 0 {
 			nextDue := time.Unix(0, lastCheck).Add(interval).Add(-lookahead)
 			if now.Before(nextDue) {
 				return true // not yet due
+			}
+		}
+
+		if entry.Outbound.Load() == nil {
+			if remainingEnsures <= 0 {
+				return true
+			}
+			remainingEnsures--
+			var ready bool
+			entry, ready = m.ensureOutboundReady(h, entry)
+			if !ready {
+				return true
 			}
 		}
 
@@ -404,7 +447,8 @@ func (m *ProbeManager) probeEgress(hash node.Hash, entry *node.NodeEntry) {
 		return
 	}
 
-	if entry.Outbound.Load() == nil {
+	entry, ready := m.ensureOutboundReady(hash, entry)
+	if !ready {
 		return
 	}
 
@@ -431,7 +475,8 @@ func (m *ProbeManager) probeLatency(hash node.Hash, entry *node.NodeEntry, testU
 		return
 	}
 
-	if entry.Outbound.Load() == nil {
+	entry, ready := m.ensureOutboundReady(hash, entry)
+	if !ready {
 		return
 	}
 
